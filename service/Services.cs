@@ -13,7 +13,9 @@ public interface IStudentService
     Task<StudentResponseDto> CreateAsync(CreateStudentDto dto);
     Task<StudentResponseDto> UpdateAsync(int id, UpdateStudentDto dto);
     Task DeleteAsync(int id);
-    Task<IEnumerable<StudentResponseDto>> GetPagedAsync(StudentQueryDto query);
+    //Task<IEnumerable<StudentResponseDto>> GetPagedAsync(StudentQueryDto query);
+    //Task<(List<Student>, int)> GetPagedAsync(StudentQueryDto query);
+    Task<PagedResponse<StudentResponseDto>> GetPagedAsync(StudentQueryDto query);
 
 }
 
@@ -99,17 +101,22 @@ public class StudentService : IStudentService
         _cache.Remove("Students_All");
         _cache.Remove($"Student_{id}");
     }
-    public async Task<IEnumerable<StudentResponseDto>> GetPagedAsync(StudentQueryDto query)
+    public async Task<PagedResponse<StudentResponseDto>> GetPagedAsync(StudentQueryDto query)
     {
-        if (query.PageNumber <= 0)
-            query.PageNumber = 1;
+        var (students, totalCount) = await _repo.GetPagedAsync(query);
 
-        if (query.PageSize <= 0 || query.PageSize > 50)
-            query.PageSize = 10;
+        var mapped = _mapper.Map<IEnumerable<StudentResponseDto>>(students);
 
-        var students = await _repo.GetPagedAsync(query);
-        return _mapper.Map<IEnumerable<StudentResponseDto>>(students);
+        return new PagedResponse<StudentResponseDto>
+        {
+            Data = mapped,
+            PageNumber = query.PageNumber,
+            PageSize = query.PageSize,
+            TotalCount = totalCount
+        };
     }
+
+
 
 }
 

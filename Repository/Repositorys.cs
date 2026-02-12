@@ -6,59 +6,63 @@ using StudentAPI.Entity;
 
 namespace StudentAPI.Repository;
 
- public class StudentRepository : IStudentRepository
- {
-        private readonly AppDbContext _context;
+public class StudentRepository : IStudentRepository
+{
+    private readonly AppDbContext _context;
 
-        public StudentRepository(AppDbContext context)
-        {
-            _context = context;
-        }
+    public StudentRepository(AppDbContext context)
+    {
+        _context = context;
+    }
 
-        public async Task<List<Student>> GetAllAsync()
-        {
-            return await _context.Students
-                .Include(s => s.Course)
-                .Where(s => !s.IsDeleted)
-                .AsNoTracking()
-                .ToListAsync();
-        }
+    public async Task<List<Student>> GetAllAsync()
+    {
+        return await _context.Students
+            .Include(s => s.Course)
+            .Where(s => !s.IsDeleted)
+            .AsNoTracking()
+            .ToListAsync();
+    }
 
-        public async Task<Student> GetByIdAsync(int id)
-        {
-            return await _context.Students
-                .Include(s => s.Course)
-                .FirstOrDefaultAsync(s => s.Id == id && !s.IsDeleted);
-        }
+    public async Task<Student> GetByIdAsync(int id)
+    {
+        return await _context.Students
+            .Include(s => s.Course)
+            .FirstOrDefaultAsync(s => s.Id == id && !s.IsDeleted);
+    }
 
-        public async Task AddAsync(Student student)
-        {
-            await _context.Students.AddAsync(student);
-        }
+    public async Task AddAsync(Student student)
+    {
+        await _context.Students.AddAsync(student);
+    }
 
-        public async Task UpdateAsync(Student student)
-        {
-            _context.Students.Update(student);
-        }
+    public async Task UpdateAsync(Student student)
+    {
+        _context.Students.Update(student);
+    }
 
-        public async Task DeleteAsync(Student student)
-        {
-            student.IsDeleted = true;
-            _context.Students.Update(student);
-        }
-    public async Task<List<Student>> GetPagedAsync(StudentQueryDto query)
+    public async Task DeleteAsync(Student student)
+    {
+        student.IsDeleted = true;
+        _context.Students.Update(student);
+    }
+
+
+
+public async Task<(List<Student>, int)> GetPagedAsync(StudentQueryDto query)
     {
         IQueryable<Student> students = _context.Students
             .Include(s => s.Course)
             .Where(s => !s.IsDeleted);
 
-        students = query.SortBy.ToLower() switch
+
+        students = query.SortBy switch
         {
-            "age" => query.Desc
+            StudentSortBy.Age => query.Desc
                 ? students.OrderByDescending(s => s.Age)
                 : students.OrderBy(s => s.Age),
 
-            "course" => query.Desc
+            StudentSortBy.Course => query.Desc
                 ? students.OrderByDescending(s => s.Course.Title)
                 : students.OrderBy(s => s.Course.Title),
 
@@ -67,11 +71,15 @@ namespace StudentAPI.Repository;
                 : students.OrderBy(s => s.Name)
         };
 
-        return await students
+        var totalCount = await students.CountAsync();
+
+        var items = await students
             .Skip((query.PageNumber - 1) * query.PageSize)
             .Take(query.PageSize)
             .AsNoTracking()
             .ToListAsync();
+
+        return (items, totalCount);
     }
 
 }
