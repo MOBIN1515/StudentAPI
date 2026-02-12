@@ -3,6 +3,7 @@ using Microsoft.Extensions.Caching.Memory;
 using StudentAPI.DTO;
 using StudentAPI.Entity;
 using StudentAPI.Repository;
+using StudentAPI.Unit;
 
 namespace StudentAPI.Application.Services;
 
@@ -13,8 +14,6 @@ public interface IStudentService
     Task<StudentResponseDto> CreateAsync(CreateStudentDto dto);
     Task<StudentResponseDto> UpdateAsync(int id, UpdateStudentDto dto);
     Task DeleteAsync(int id);
-    //Task<IEnumerable<StudentResponseDto>> GetPagedAsync(StudentQueryDto query);
-    //Task<(List<Student>, int)> GetPagedAsync(StudentQueryDto query);
     Task<PagedResponse<StudentResponseDto>> GetPagedAsync(StudentQueryDto query);
 
 }
@@ -24,9 +23,11 @@ public class StudentService : IStudentService
     private readonly IStudentRepository _repo;
     private readonly IMapper _mapper;
     private readonly IMemoryCache _cache;
+    private readonly IUnitOfWork unit;
 
-    public StudentService(IStudentRepository repo, IMapper mapper, IMemoryCache cache)
+    public StudentService(IStudentRepository repo, IMapper mapper, IMemoryCache cache, IUnitOfWork _unit)
     {
+        unit = _unit;
         _repo = repo;
         _mapper = mapper;
         _cache = cache;
@@ -53,6 +54,7 @@ public class StudentService : IStudentService
             return cached;
 
         var student = await _repo.GetByIdAsync(id);
+        await unit.CommitAsync();
         if (student == null) return null;
 
         var result = _mapper.Map<StudentResponseDto>(student);
@@ -65,6 +67,7 @@ public class StudentService : IStudentService
     {
         var student = _mapper.Map<Student>(dto);
         await _repo.AddAsync(student);
+        await unit.CommitAsync();
         var result = _mapper.Map<StudentResponseDto>(student);
 
         _cache.Remove("Students_All");
@@ -81,11 +84,11 @@ public class StudentService : IStudentService
 
         student.Name = dto.Name;
         student.Age = dto.Age;
-        student.Gender = dto.Gender;
         student.CourseId = dto.CourseId;
         student.RowVersion = dto.RowVersion;
 
         await _repo.UpdateAsync(student);
+        await unit.CommitAsync();
         _cache.Remove("Students_All");
         _cache.Remove($"Student_{id}");
 
@@ -98,6 +101,7 @@ public class StudentService : IStudentService
         if (student == null) return;
 
         await _repo.DeleteAsync(student);
+        await unit.CommitAsync();
         _cache.Remove("Students_All");
         _cache.Remove($"Student_{id}");
     }

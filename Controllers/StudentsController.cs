@@ -39,7 +39,16 @@ public class StudentsController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> Post([FromBody] CreateStudentDto dto) => Ok(await _service.CreateAsync(dto));
+    public async Task<IActionResult> Post([FromBody] CreateStudentDto dto)
+    {
+        var createdStudent = await _service.CreateAsync(dto);
+        return CreatedAtAction(
+            nameof(Get),            
+            new { id = createdStudent.Id }, 
+            createdStudent        
+        );
+    }
+
 
     [HttpPut("{id}")]
     public async Task<IActionResult> Put(int id, [FromBody] UpdateStudentDto dto)

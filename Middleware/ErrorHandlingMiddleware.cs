@@ -1,62 +1,70 @@
 ﻿using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Net;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace StudentAPI.Middleware;
-
-public class ErrorHandlingMiddleware
+namespace StudentAPI.Middleware
 {
-    private readonly RequestDelegate _next;
-    private readonly ILogger<ErrorHandlingMiddleware> logger;
-
-    public ErrorHandlingMiddleware(RequestDelegate next, ILogger<ErrorHandlingMiddleware> _logger)
+    public class ErrorHandlingMiddleware
     {
-        logger = _logger;
-        _next = next;
-    }
+        private readonly RequestDelegate _next;
+        private readonly ILogger<ErrorHandlingMiddleware> _logger;
 
-
-
-
-    public async Task InvokeAsync(HttpContext context)
-    {
-        try
+        public ErrorHandlingMiddleware(RequestDelegate next, ILogger<ErrorHandlingMiddleware> logger)
         {
-            await _next(context);
+            _next = next;
+            _logger = logger;
         }
-        catch (Exception ex)
-        {
-            logger.LogError(ex,
-            "Unhandled exception for request {Path}",
-            context.Request.Path);
 
-            context.Response.StatusCode = 500;
-            await context.Response.WriteAsJsonAsync(
-                new { message = "Internal Server Error" });
+        public async Task InvokeAsync(HttpContext context)
+        {
+            try
+            {
+                await _next(context);
+            }
+            catch (Exception ex)
+            {
+                await HandleExceptionAsync(context, ex, _logger);
+            }
         }
-    }
 
-    private static Task HandleExceptionAsync(HttpContext context, Exception exception)
-    {
-        var statusCode = HttpStatusCode.InternalServerError;
-
-        // Custom exception types
-        if (exception is ArgumentException) statusCode = HttpStatusCode.BadRequest;
-        if (exception is KeyNotFoundException) statusCode = HttpStatusCode.NotFound;
-
-        var response = new
+        private static async Task HandleExceptionAsync(HttpContext context, Exception exception, ILogger logger)
         {
-            error = exception.Message,
-            statusCode = (int)statusCode
-        };
+            HttpStatusCode statusCode = HttpStatusCode.InternalServerError;
+            string message = "Internal Server Error";
 
-        var payload = JsonSerializer.Serialize(response);
+            switch (exception)
+            {
+                case ArgumentException:
+                    statusCode = HttpStatusCode.BadRequest;
+                    message = exception.Message;
+                    break;
 
-        context.Response.ContentType = "application/json";
-        context.Response.StatusCode = (int)statusCode;
+                case KeyNotFoundException:
+                    statusCode = HttpStatusCode.NotFound;
+                    message = exception.Message;
+                    break;
 
-        return context.Response.WriteAsync(payload);
+                    // Add more custom exception types here
+            }
+
+            // Log full exception
+            logger.LogError(exception, "Unhandled exception occurred while processing request");
+
+            var response = new
+            {
+                StatusCode = (int)statusCode,
+                Message = message
+            };
+
+            context.Response.ContentType = "application/json";
+            context.Response.StatusCode = (int)statusCode;
+
+            var json = JsonSerializer.Serialize(response);
+
+            await context.Response.WriteAsync(json);
+        }
     }
 }
